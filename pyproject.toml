@@ -7,6 +7,7 @@ requires-python = ">=3.11"
 dependencies = [
     "ipynb>=0.5.1",
     "matplotlib>=3.10.8",
+    "mplsoccer>=1.6.1",
     "numpy>=2.4.3",
     "pandas>=3.0.1",
     "pyarrow>=23.0.1",
