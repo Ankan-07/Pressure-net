@@ -3,13 +3,16 @@ import sys
 from logger import logging
 from exception import CustomException
 import pandas as pd
+import numpy as np
+from scipy.spatial import Voronoi
+from shapely.geometry import Polygon, MultiPolygon
 
 def filter_pressing_events(events, frames_exploded):
     allowed = ["Pass", "Carry", "Dribble", "Shot"]
-    event_id_with_freezeframes = frames_exploded["event_uuid"] 
+    event_id_with_freezeframes = frames_exploded["event_uuid"]
 
     pressing_events = events[
-        
+
         events["type"].apply(lambda x: x.get("name")).isin(allowed) &
 
         events["id"].isin(event_id_with_freezeframes) &
@@ -39,12 +42,117 @@ def get_label(row):
         if row["carry"].get("end_location")[0] - row["location"][0] >=5:
             return 1
 
-
-
     return 0
 
 def assign_labels(pressing_events):
     pressing_events = pressing_events.copy()
     pressing_events["label"] = pressing_events.apply(get_label, axis=1)
-    
+
     return pressing_events
+
+def get_defender_distance(event_id, event_loc, frames_exploded):
+    defenders = frames_exploded[(frames_exploded['event_uuid'] == event_id) 
+                                & (frames_exploded['teammate']==False)
+                                & (frames_exploded['actor']== False)
+                                & (frames_exploded['keeper']==False)]
+    
+    if len(defenders) == 0:
+        return (np.nan, np.nan, np.nan, 0)
+    
+    distances = np.sqrt((defenders["loc_x"]-event_loc[0])**2+ (defenders["loc_y"] - event_loc[1])**2)
+
+    n_defenders_within_5m = (distances <= 5).sum()
+
+    sorted_dists = sorted(distances.values)
+    return (
+        sorted_dists[0] if len(sorted_dists) >0 else np.nan,
+        sorted_dists[1] if len(sorted_dists) >1 else np.nan,
+        sorted_dists[2] if len(sorted_dists) >2 else np.nan,
+        n_defenders_within_5m
+    )
+
+def get_closing_speeds(event_t0, event_t1, frames_exploded):
+    """
+    Calculate closing speeds of nearest and 2nd nearest defenders from t-1 to t=0.
+
+    Args:
+        event_t0: pandas Series - the current pressing event (t=0)
+        event_t1: pandas Series - the previous event (t-1)
+        frames_exploded: DataFrame - exploded freeze frames
+
+    Returns:
+        Tuple of (closing_speed_nearest, closing_speed_2nd) in m/s
+        Positive = defender is approaching (distance decreasing)
+    """
+    # Check if t-1 has a freeze frame
+    event_id_t1 = event_t1["id"]
+    if len(frames_exploded[frames_exploded["event_uuid"] == event_id_t1]) == 0:
+        return (0.0, 0.0)
+
+    # Check if periods differ (e.g. end of first half to start of second)
+    if event_t0.get("period") != event_t1.get("period"):
+        return (0.0, 0.0)
+
+    # Compute time delta in seconds
+    time_t0 = event_t0["minute"] * 60 + event_t0["second"]
+    time_t1 = event_t1["minute"] * 60 + event_t1["second"]
+    time_delta = time_t0 - time_t1
+
+    if time_delta <= 0:
+        return (0.0, 0.0)
+
+    # Get defender distances at both time points
+    event_id_t0 = event_t0["id"]
+    loc_t0 = event_t0["location"]
+    loc_t1 = event_t1["location"]
+
+    dist_t0_1, dist_t0_2, _, _ = get_defender_distance(event_id_t0, loc_t0, frames_exploded)
+    dist_t1_1, dist_t1_2, _, _ = get_defender_distance(event_id_t1, loc_t1, frames_exploded)
+
+    # Calculate closing speeds: (distance_at_t-1 - distance_at_t0) / time_delta
+    # Positive = defender is closing in
+    closing_speed_nearest = (dist_t1_1 - dist_t0_1) / time_delta if not (pd.isna(dist_t1_1) or pd.isna(dist_t0_1)) else 0.0
+    closing_speed_2nd = (dist_t1_2 - dist_t0_2) / time_delta if not (pd.isna(dist_t1_2) or pd.isna(dist_t0_2)) else 0.0
+
+    return (closing_speed_nearest, closing_speed_2nd)
+
+def get_ball_carrier_location(event):
+    x, y = event["location"]
+    return (x / 120.0, y / 80.0)
+
+PITCH = Polygon([(0, 0), (120, 0), (120, 80), (0, 80)])
+
+def get_voronoi_area(event_id, frames_exploded):
+    players = frames_exploded[frames_exploded["event_uuid"] == event_id]
+
+    if len(players) < 4:
+        return np.nan
+
+    points = players[["loc_x", "loc_y"]].values
+
+    # Find ball-carrier using actor flag (more reliable than coordinate matching)
+    actor_mask = players["actor"].values == True
+    if not actor_mask.any():
+        return np.nan
+    carrier_idx = np.where(actor_mask)[0][0]
+
+    vor = Voronoi(points)
+
+    # Get the region index for the ball-carrier, then the vertex indices for that region
+    region_idx = vor.point_region[carrier_idx]
+    region = vor.regions[region_idx]
+
+    if len(region) == 0:
+        return np.nan
+
+    if -1 in region:
+        # Open region — build from finite vertices only, then clip to pitch to close it
+        finite_verts = [vor.vertices[i] for i in region if i != -1]
+        if len(finite_verts) < 2:
+            return np.nan
+        region_poly = Polygon(finite_verts).convex_hull
+    else:
+        region_poly = Polygon([vor.vertices[i] for i in region])
+
+    clipped = region_poly.intersection(PITCH)
+    return clipped.area
