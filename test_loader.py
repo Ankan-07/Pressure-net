@@ -1,5 +1,5 @@
 from src.ingestion.loader import load_processed
-from src.transformation.engineer import (filter_pressing_events, get_label, assign_labels, get_defender_distance, get_closing_speeds, get_voronoi_area, get_pitch_zone, get_pass_lane_density)
+from src.transformation.engineer import (filter_pressing_events, get_label, assign_labels, get_defender_distance, get_closing_speeds, get_voronoi_area, get_pitch_zone, get_pass_lane_density, build_feature_vector)
 import pandas as pd
 import numpy as np
 
@@ -296,8 +296,68 @@ def test_get_pass_lane_density():
     print("\n[SUCCESS] test_get_pass_lane_density PASSED\n")
 
 
+def test_build_feature_vector():
+    print("\n" + "="*60)
+    print("Testing build_feature_vector()")
+    print("="*60)
+
+    events_sorted = events.sort_values(["match_id", "index"]).reset_index(drop=True)
+
+    sample_event = None
+    prev_event = None
+    for _, ev in pressing_events_labeled.iterrows():
+        prior = events_sorted[
+            (events_sorted["match_id"] == ev["match_id"]) &
+            (events_sorted["index"] < ev["index"])
+        ]
+        if len(prior) > 0:
+            sample_event = ev
+            prev_event = prior.iloc[-1]
+            break
+
+    print(f"\nTest Event: {sample_event['type'].get('name')} at {sample_event['location']}")
+    print(f"Prior Event: {prev_event['type'].get('name')}")
+
+    vec = build_feature_vector(sample_event, prev_event, frames)
+    print(f"\nFeature vector: {vec}")
+
+    print("\nValidation Checks:")
+
+    assert vec.shape == (15,), f"Expected shape (15,), got {vec.shape}"
+    print("  [PASS] Shape is (15,)")
+
+    assert vec.dtype == np.float32, f"Expected float32, got {vec.dtype}"
+    print("  [PASS] dtype is float32")
+
+    assert not np.any(np.isnan(vec)), "Feature vector contains NaN"
+    assert not np.any(np.isinf(vec)), "Feature vector contains Inf"
+    print("  [PASS] No NaN or Inf values")
+
+    assert 0.0 <= vec[5] <= 1.0 and 0.0 <= vec[6] <= 1.0
+    print(f"  [PASS] Normalised position in [0,1]: x={vec[5]:.3f}, y={vec[6]:.3f}")
+
+    assert 0.0 <= vec[8] <= 5.0
+    print(f"  [PASS] Pitch zone in [0,5]: {vec[8]:.0f}")
+
+    assert 0.0 <= vec[12] <= 4.0
+    print(f"  [PASS] Action type in [0,4]: {vec[12]:.0f}")
+
+    assert -1.0 <= vec[13] <= 1.0 and -1.0 <= vec[14] <= 1.0
+    print(f"  [PASS] Orientation sin/cos in [-1,1]: sin={vec[13]:.3f}, cos={vec[14]:.3f}")
+
+    assert vec[0] >= 0.0 and vec[1] >= 0.0 and vec[2] >= 0.0
+    print(f"  [PASS] Defender distances non-negative: {vec[0]:.2f}, {vec[1]:.2f}, {vec[2]:.2f}")
+
+    vec_no_prior = build_feature_vector(sample_event, None, frames)
+    assert vec_no_prior[3] == 0.0 and vec_no_prior[4] == 0.0 and vec_no_prior[9] == 0.0
+    print("  [PASS] No prior event -> closing speeds and time_since are 0.0")
+
+    print("\n[SUCCESS] test_build_feature_vector PASSED\n")
+
+
 #test_get_defender_distance()
 #test_get_closing_speeds()
 #test_get_voronoi_area()
 #test_get_pitch_zone()
-test_get_pass_lane_density()
+#test_get_pass_lane_density()
+test_build_feature_vector()

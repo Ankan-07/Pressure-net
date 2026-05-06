@@ -203,3 +203,74 @@ def get_voronoi_area(event_id, frames_exploded):
 
     clipped = region_poly.intersection(PITCH)
     return clipped.area
+
+
+ACTION_TYPE_MAP = {"Pass": 0, "Dribble": 1, "Carry": 2, "Shot": 3, "Cross": 4}
+
+def build_feature_vector(event, prev_event, frames_exploded):
+    event_id = event["id"]
+    loc = event["location"]
+
+    # Features 0-2, 10: defender distances + count within 5m
+    d1, d2, d3, n_within_5m = get_defender_distance(event_id, loc, frames_exploded)
+
+    # Features 3-4: closing speeds (0.0 if no prior event)
+    if prev_event is not None:
+        cs_nearest, cs_2nd = get_closing_speeds(event, prev_event, frames_exploded)
+    else:
+        cs_nearest, cs_2nd = 0.0, 0.0
+
+    # Features 5-6: normalised ball-carrier position
+    norm_x, norm_y = get_ball_carrier_location(event)
+
+    # Feature 7: Voronoi area (nan → 0.0)
+    voronoi_area = get_voronoi_area(event_id, frames_exploded)
+    if np.isnan(voronoi_area):
+        voronoi_area = 0.0
+
+    # Feature 8: pitch zone
+    pitch_zone = get_pitch_zone(loc[0], loc[1])
+
+    # Feature 9: time since last touch in seconds (0.0 if no prior event or different period)
+    if prev_event is not None and event.get("period") == prev_event.get("period"):
+        time_since = (event["minute"] * 60 + event["second"]) - (prev_event["minute"] * 60 + prev_event["second"])
+        time_since = max(0.0, float(time_since))
+    else:
+        time_since = 0.0
+
+    # Feature 11: pass lane density
+    pass_lane_density = get_pass_lane_density(event_id, loc, frames_exploded)
+
+    # Feature 12: action type integer
+    action_name = event["type"].get("name", "Pass")
+    action_type = ACTION_TYPE_MAP.get(action_name, 0)
+
+    # Features 13-14: body orientation sin/cos (0.0 if missing)
+    # StatsBomb stores player orientation in the `player_data` field as `position_angle`
+    orientation_deg = None
+    if isinstance(event.get("player_data"), dict):
+        orientation_deg = event["player_data"].get("position_angle")
+    if orientation_deg is None:
+        orientation_sin, orientation_cos = 0.0, 0.0
+    else:
+        rad = orientation_deg * np.pi / 180.0
+        orientation_sin = float(np.sin(rad))
+        orientation_cos = float(np.cos(rad))
+
+    return np.array([
+        d1 if not np.isnan(d1) else 0.0,   # 0
+        d2 if not np.isnan(d2) else 0.0,   # 1
+        d3 if not np.isnan(d3) else 0.0,   # 2
+        cs_nearest,                          # 3
+        cs_2nd,                              # 4
+        norm_x,                              # 5
+        norm_y,                              # 6
+        voronoi_area,                        # 7
+        float(pitch_zone),                   # 8
+        time_since,                          # 9
+        float(n_within_5m),                  # 10
+        pass_lane_density,                   # 11
+        float(action_type),                  # 12
+        orientation_sin,                     # 13
+        orientation_cos,                     # 14
+    ], dtype=np.float32)
