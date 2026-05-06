@@ -1,5 +1,5 @@
 from src.ingestion.loader import load_processed
-from src.transformation.engineer import (filter_pressing_events, get_label, assign_labels, get_defender_distance, get_closing_speeds, get_voronoi_area, get_pitch_zone)
+from src.transformation.engineer import (filter_pressing_events, get_label, assign_labels, get_defender_distance, get_closing_speeds, get_voronoi_area, get_pitch_zone, get_pass_lane_density)
 import pandas as pd
 import numpy as np
 
@@ -257,7 +257,47 @@ def test_get_pitch_zone():
     print("\n[SUCCESS] test_get_pitch_zone PASSED\n")
 
 
+def test_get_pass_lane_density():
+    print("\n" + "="*60)
+    print("Testing get_pass_lane_density()")
+    print("="*60)
+
+    sample_event = pressing_events_labeled.iloc[0]
+    event_id = sample_event["id"]
+    event_loc = sample_event["location"]
+
+    print(f"\nTest Event: {sample_event['type'].get('name')} at {event_loc}")
+
+    density = get_pass_lane_density(event_id, event_loc, frames)
+    print(f"Pass Lane Density: {density:.4f}")
+
+    print("\nValidation Checks:")
+
+    assert isinstance(density, float), "Density must be a float"
+    print("  [PASS] Return type is float")
+
+    assert density >= 0, "Density must be non-negative"
+    print("  [PASS] Density is non-negative")
+
+    assert density <= 11, f"Density {density} implausibly high (max 11 opponents)"
+    print("  [PASS] Density within plausible range (<= 11)")
+
+    event_players = frames[frames["event_uuid"] == event_id]
+    teammates_only = event_players[event_players["teammate"] == True].copy()
+    density_edge = get_pass_lane_density(event_id, event_loc, teammates_only)
+    assert density_edge == 0.0, "Should return 0.0 when no opponents present"
+    print("  [PASS] Edge case (no opponents) returns 0.0")
+
+    densities = [get_pass_lane_density(ev["id"], ev["location"], frames)
+                 for _, ev in pressing_events_labeled.iloc[:20].iterrows()]
+    assert len(set(densities)) > 1, "Density should vary across different events"
+    print(f"  [PASS] Values vary across 20 events: min={min(densities):.2f}, max={max(densities):.2f}")
+
+    print("\n[SUCCESS] test_get_pass_lane_density PASSED\n")
+
+
 #test_get_defender_distance()
 #test_get_closing_speeds()
 #test_get_voronoi_area()
-test_get_pitch_zone()
+#test_get_pitch_zone()
+test_get_pass_lane_density()

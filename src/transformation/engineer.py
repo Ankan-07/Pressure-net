@@ -137,6 +137,32 @@ def get_pitch_zone(x, y):
     return 4
 
 
+def get_pass_lane_density(event_id, ball_carrier_loc, frames_exploded):
+    opponents = frames_exploded[
+        (frames_exploded["event_uuid"] == event_id)
+        & (frames_exploded["teammate"] == False)
+        & (frames_exploded["actor"] == False)
+        & (frames_exploded["keeper"] == False)
+    ]
+
+    if len(opponents) == 0:
+        return 0.0
+
+    dx = opponents["loc_x"].values - ball_carrier_loc[0]
+    dy = opponents["loc_y"].values - ball_carrier_loc[1]
+    angles = np.degrees(np.arctan2(dy, dx)) % 360  # 0–360
+
+    # 8 bins of 45° each
+    bin_counts = np.zeros(8)
+    for angle in angles:
+        bin_idx = int(angle // 45) % 8
+        bin_counts[bin_idx] += 1
+
+    # Average of top-3 most populated bins
+    top3 = np.sort(bin_counts)[-3:]
+    return float(np.mean(top3))
+
+
 def get_ball_carrier_location(event):
     x, y = event["location"]
     return (x / 120.0, y / 80.0)
