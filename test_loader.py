@@ -1,5 +1,5 @@
 from src.ingestion.loader import load_processed
-from src.transformation.engineer import (filter_pressing_events, get_label, assign_labels, get_defender_distance, get_closing_speeds, get_voronoi_area)
+from src.transformation.engineer import (filter_pressing_events, get_label, assign_labels, get_defender_distance, get_closing_speeds, get_voronoi_area, get_pitch_zone)
 import pandas as pd
 import numpy as np
 
@@ -214,6 +214,50 @@ def test_get_voronoi_area():
 
     print("\n[SUCCESS] test_get_voronoi_area PASSED\n")
 
+def test_get_pitch_zone():
+    print("\n" + "="*60)
+    print("Testing get_pitch_zone()")
+    print("="*60)
+
+    print("\nValidation Checks:")
+
+    assert get_pitch_zone(5, 40) == 0
+    assert get_pitch_zone(17.9, 40) == 0
+    print("  [PASS] Zone 0 (own box): x < 18")
+
+    assert get_pitch_zone(18, 40) == 1
+    assert get_pitch_zone(39.9, 40) == 1
+    print("  [PASS] Zone 1 (defensive third): 18 <= x < 40")
+
+    assert get_pitch_zone(60, 10) == 2
+    assert get_pitch_zone(40, 26.9) == 2
+    print("  [PASS] Zone 2 (left half-space): 40 <= x < 80, y < 27")
+
+    assert get_pitch_zone(60, 70) == 3
+    assert get_pitch_zone(79.9, 53.1) == 3
+    print("  [PASS] Zone 3 (right half-space): 40 <= x < 80, y > 53")
+
+    assert get_pitch_zone(60, 40) == 4
+    assert get_pitch_zone(40, 27) == 4
+    print("  [PASS] Zone 4 (central/final third): 40 <= x < 80, 27 <= y <= 53")
+
+    assert get_pitch_zone(80, 40) == 4
+    assert get_pitch_zone(102, 40) == 4
+    print("  [PASS] Zone 4 (final third): 80 <= x <= 102")
+
+    assert get_pitch_zone(103, 40) == 5
+    assert get_pitch_zone(119, 40) == 5
+    print("  [PASS] Zone 5 (opp box): x > 102")
+
+    x, y = pressing_events_labeled.iloc[0]["location"]
+    zone = get_pitch_zone(x, y)
+    assert isinstance(zone, int) and 0 <= zone <= 5, f"Zone {zone} out of range 0-5"
+    print(f"  [PASS] Sample event at ({x}, {y}) -> zone {zone}")
+
+    print("\n[SUCCESS] test_get_pitch_zone PASSED\n")
+
+
 #test_get_defender_distance()
 #test_get_closing_speeds()
-test_get_voronoi_area()
+#test_get_voronoi_area()
+test_get_pitch_zone()

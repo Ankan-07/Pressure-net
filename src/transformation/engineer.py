@@ -116,6 +116,27 @@ def get_closing_speeds(event_t0, event_t1, frames_exploded):
 
     return (closing_speed_nearest, closing_speed_2nd)
 
+def get_pitch_zone(x, y):
+    # Zone 0: own penalty area
+    if x < 18:
+        return 0
+    # Zone 1: defensive third outside own box
+    if x < 40:
+        return 1
+    # Middle third (x: 40–80) — split into half-spaces and central channel
+    if x < 80:
+        if y < 27:
+            return 2  # left half-space
+        if y > 53:
+            return 3  # right half-space
+        return 4      # central channel → grouped with final third
+    # Zone 5: opponent penalty area
+    if x > 102:
+        return 5
+    # Zone 4: final third outside opp box (x: 80–102)
+    return 4
+
+
 def get_ball_carrier_location(event):
     x, y = event["location"]
     return (x / 120.0, y / 80.0)
