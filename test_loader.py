@@ -1,5 +1,6 @@
 from src.ingestion.loader import load_processed
-from src.transformation.engineer import (filter_pressing_events, get_label, assign_labels, get_defender_distance, get_closing_speeds, get_voronoi_area, get_pitch_zone, get_pass_lane_density, build_feature_vector)
+from src.transformation.engineer import (filter_pressing_events, get_label, assign_labels, get_defender_distance, get_closing_speeds, get_voronoi_area, get_pitch_zone, get_pass_lane_density, build_feature_vector, build_all_features)
+import time
 import pandas as pd
 import numpy as np
 
@@ -355,9 +356,32 @@ def test_build_feature_vector():
     print("\n[SUCCESS] test_build_feature_vector PASSED\n")
 
 
+def run_build_all_features_sample(n=500):
+    print("\n" + "="*60)
+    print(f"Timing test: build_all_features on {n} events")
+    print("="*60)
+
+    start = time.time()
+    df_sample = build_all_features(
+        pressing_events_labeled, events, frames,
+        output_path="data/features/features_sample.parquet",
+        sample_n=n,
+    )
+    elapsed = time.time() - start
+
+    n_total = len(pressing_events_labeled)
+    print(f"\n{n} events took {elapsed:.1f}s")
+    print(f"Estimated full run ({n_total} events): {elapsed * n_total / n / 60:.1f} minutes")
+    print(f"Output shape: {df_sample.shape}")
+    print(f"Padded t-2 (mask_t0): {df_sample['mask_t0'].sum()}")
+    print(f"Padded t-1 (mask_t1): {df_sample['mask_t1'].sum()}")
+    print(f"Padded t=0 (mask_t2): {df_sample['mask_t2'].sum()}  (should be 0)")
+
+
 #test_get_defender_distance()
 #test_get_closing_speeds()
 #test_get_voronoi_area()
 #test_get_pitch_zone()
 #test_get_pass_lane_density()
-test_build_feature_vector()
+#test_build_feature_vector()
+run_build_all_features_sample(500)

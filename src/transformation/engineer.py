@@ -195,11 +195,14 @@ def get_voronoi_area(event_id, frames_exploded):
     if -1 in region:
         # Open region — build from finite vertices only, then clip to pitch to close it
         finite_verts = [vor.vertices[i] for i in region if i != -1]
-        if len(finite_verts) < 2:
+        if len(finite_verts) < 3:
             return np.nan
         region_poly = Polygon(finite_verts).convex_hull
     else:
-        region_poly = Polygon([vor.vertices[i] for i in region])
+        verts = [vor.vertices[i] for i in region]
+        if len(verts) < 3:
+            return np.nan
+        region_poly = Polygon(verts)
 
     clipped = region_poly.intersection(PITCH)
     return clipped.area
@@ -274,3 +277,169 @@ def build_feature_vector(event, prev_event, frames_exploded):
         orientation_sin,                     # 13
         orientation_cos,                     # 14
     ], dtype=np.float32)
+
+
+def build_temporal_window(event_t0, prior_events, frames_lookup, feature_cache=None):
+    """
+    Build (3, 15) feature window for one pressing event.
+
+    Args:
+        event_t0: pandas Series of the pressing event
+        prior_events: DataFrame of all events in the same match with index < event_t0's index,
+                      sorted ascending by event index. The last row is t-1, second-to-last is t-2.
+        frames_lookup: dict {event_uuid: pre-filtered frames DataFrame for that event}
+
+    Returns:
+        (features, mask) where features is (3, 15) float32 and mask is (3,) bool
+        mask[i] = True means timestep i is zero-padded (no real event existed)
+    """
+    event_t1 = prior_events.iloc[-1] if len(prior_events) >= 1 else None
+    event_t2 = prior_events.iloc[-2] if len(prior_events) >= 2 else None
+    event_t3 = prior_events.iloc[-3] if len(prior_events) >= 3 else None  # t-2's prev for closing speed
+
+    # Each timestep needs (event, prev_event_for_closing_speed)
+    timesteps = [
+        (event_t2, event_t3),  # row 0 → t-2
+        (event_t1, event_t2),  # row 1 → t-1
+        (event_t0, event_t1),  # row 2 → t=0
+    ]
+
+    features = np.zeros((3, 15), dtype=np.float32)
+    mask = np.zeros(3, dtype=bool)
+
+    for i, (event, prev) in enumerate(timesteps):
+        if event is None:
+            mask[i] = True
+            continue
+
+        eid = event["id"]
+
+        # Cache hit: reuse previously computed feature vector
+        if feature_cache is not None and eid in feature_cache:
+            cached = feature_cache[eid]
+            if cached is None:
+                mask[i] = True
+            else:
+                features[i] = cached
+            continue
+
+        # Pre-filtered frames for this event from lookup; missing → padded
+        event_frames = frames_lookup.get(eid)
+        if event_frames is None or len(event_frames) == 0:
+            mask[i] = True
+            if feature_cache is not None:
+                feature_cache[eid] = None
+            continue
+
+        try:
+            vec = build_feature_vector(event, prev, event_frames)
+            features[i] = vec
+            if feature_cache is not None:
+                feature_cache[eid] = vec
+        except Exception as e:
+            mask[i] = True
+            if feature_cache is not None:
+                feature_cache[eid] = None
+            logging.warning(f"build_feature_vector failed for event {eid} at timestep {i}: {type(e).__name__}: {e}")
+
+    return features, mask
+
+
+def build_all_features(pressing_events_labeled, events, frames_exploded,
+                       output_path="data/features/features.parquet",
+                       checkpoint_every=5000, sample_n=None):
+    """
+    Build temporal windows for all pressing events and save to parquet.
+
+    Optimisations:
+      - frames pre-grouped by event_uuid (dict) → O(1) lookup vs O(N_frames) filter
+      - events pre-grouped by match_id (dict) → smaller per-event slice
+      - per-event try/except → one bad event won't kill the run
+      - tqdm progress bar with ETA
+      - checkpoint partial results every `checkpoint_every` events
+
+    Args:
+        sample_n: if set, only process the first N pressing events (for timing tests)
+    """
+    from tqdm import tqdm
+    import time
+
+    if sample_n is not None:
+        pressing_events_labeled = pressing_events_labeled.iloc[:sample_n]
+
+    # Pre-sort and pre-group events by match_id once
+    t0 = time.time()
+    events_sorted = events.sort_values(["match_id", "index"]).reset_index(drop=True)
+    events_by_match = {mid: g.reset_index(drop=True) for mid, g in events_sorted.groupby("match_id")}
+    setup_events_time = time.time() - t0
+
+    # Pre-group frames by event_uuid — biggest single speedup
+    t1 = time.time()
+    frames_lookup = {eid: g for eid, g in frames_exploded.groupby("event_uuid")}
+    setup_frames_time = time.time() - t1
+
+    print(f"Setup: events sort+group {setup_events_time:.1f}s, frames groupby {setup_frames_time:.1f}s")
+
+    # Per-event feature cache: each event_id is computed at most once across all windows
+    feature_cache = {}
+
+    n = len(pressing_events_labeled)
+    feature_rows = np.zeros((n, 3, 15), dtype=np.float32)
+    mask_rows = np.zeros((n, 3), dtype=bool)
+    event_ids = []
+    match_ids = []
+    labels = []
+
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+    for i, (_, ev) in enumerate(tqdm(pressing_events_labeled.iterrows(), total=n, desc="Building features")):
+        match_id = ev["match_id"]
+        idx = ev["index"]
+
+        match_events = events_by_match.get(match_id)
+        if match_events is None:
+            mask_rows[i, :] = True
+        else:
+            prior = match_events[match_events["index"] < idx]
+            features, mask = build_temporal_window(ev, prior, frames_lookup, feature_cache)
+            feature_rows[i] = features
+            mask_rows[i] = mask
+
+        event_ids.append(ev["id"])
+        match_ids.append(match_id)
+        labels.append(ev["label"])
+
+        # Checkpoint partial results
+        if (i + 1) % checkpoint_every == 0:
+            _save_partial(feature_rows[:i + 1], mask_rows[:i + 1],
+                          event_ids, match_ids, labels, output_path + ".partial")
+
+    df_out = _build_output_df(feature_rows, mask_rows, event_ids, match_ids, labels)
+    df_out.to_parquet(output_path, index=False)
+
+    # Clean up partial file
+    partial = output_path + ".partial"
+    if os.path.exists(partial):
+        os.remove(partial)
+
+    return df_out
+
+
+def _build_output_df(features, masks, event_ids, match_ids, labels):
+    # Flatten (N, 3, 15) → 45 columns named feat_t{ts}_{idx}
+    n = features.shape[0]
+    flat = features.reshape(n, 45)
+    feat_cols = [f"feat_t{t}_{f}" for t in range(3) for f in range(15)]
+    df = pd.DataFrame(flat, columns=feat_cols)
+    df["mask_t0"] = masks[:, 0]  # t-2
+    df["mask_t1"] = masks[:, 1]  # t-1
+    df["mask_t2"] = masks[:, 2]  # t=0 (should always be False)
+    df["event_id"] = event_ids
+    df["match_id"] = match_ids
+    df["label"] = labels
+    return df
+
+
+def _save_partial(features, masks, event_ids, match_ids, labels, path):
+    df = _build_output_df(features, masks, event_ids, match_ids, labels)
+    df.to_parquet(path, index=False)
