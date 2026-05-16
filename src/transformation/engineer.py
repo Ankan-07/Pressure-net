@@ -5,7 +5,7 @@ from exception import CustomException
 import pandas as pd
 import numpy as np
 from scipy.spatial import Voronoi
-from shapely.geometry import Polygon, MultiPolygon
+from shapely.geometry import Polygon
 
 def filter_pressing_events(events, frames_exploded):
     allowed = ["Pass", "Carry", "Dribble", "Shot"]
