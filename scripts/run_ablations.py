@@ -1,27 +1,3 @@
-"""
-Week 5 ablation studies (from CLAUDE.md).
-
-Four runs, each compared to the existing Week 4 baseline (results/{lstm,
-transformer}.json). Goal: confirm that the design decisions in CLAUDE.md
-are load-bearing — temporal context matters, hidden size 64 is well-
-chosen, closing-speed features carry real signal.
-
-| # | Variant                     | Tests                                                |
-|---|-----------------------------|------------------------------------------------------|
-| 1 | LSTM T=1                    | Sequence modelling is needed (not just t=0 features) |
-| 2 | LSTM hidden=32              | Hidden=64 capacity is justified                      |
-| 3 | Transformer T=1             | Self-attention benefits from multi-timestep context  |
-| 4 | Transformer no-closing-speed| Features 3,4 (closing_speed_*) add real signal       |
-
-Each ablation re-trains from scratch with the same split (seed=42),
-same optimizer, same early-stopping policy, then evaluates on the test
-split. We mutate the standardised dataset in-place AFTER fitting the
-scaler on the unmodified train data — so the only thing that changes
-is what the model can see during training and inference.
-
-Run from project root:
-    uv run python scripts/run_ablations.py
-"""
 from __future__ import annotations
 
 import json
@@ -58,32 +34,18 @@ def lstm_forward(m, b): return m(b["x"], b["num_real"])
 def transformer_forward(m, b): return m(b["x"], b["pad_mask"])
 
 
-# ---------------------------------------------------------------------------
-# In-place dataset mutations
-# ---------------------------------------------------------------------------
-# Tensor layout (see src/models/dataset.py): X[:, t, f] with t=0 chronologically
-# earliest (= t-2) and t=2 chronologically latest (= the action moment).
-# masks[:, t] is True where that timestep is padded; num_real ∈ {1, 2, 3} counts
-# real timesteps starting from the END of the window.
-
-CLOSING_SPEED_IDX = [3, 4]   # closing_speed_nearest, closing_speed_2nd
+CLOSING_SPEED_IDX = [3, 4]                                             
 
 
 def mutate_t1_only(ds: PressureDataset) -> None:
-    """Keep only the t=0 (action-moment) row. Zero the past, mask it, num_real=1."""
     ds.X[:, [0, 1], :] = 0.0
     ds.masks[:, [0, 1]] = True
     ds.num_real[:] = 1
 
 
 def mutate_drop_features(ds: PressureDataset, idxs: list[int]) -> None:
-    """Zero the given feature columns at every timestep (post-standardisation)."""
     ds.X[:, :, idxs] = 0.0
 
-
-# ---------------------------------------------------------------------------
-# Per-ablation runner
-# ---------------------------------------------------------------------------
 
 def evaluate_split(model, ds, forward_fn) -> dict:
     logits, labels = predict_logits(model, ds, forward_fn)
@@ -103,8 +65,8 @@ def run_one(name: str, train_df, val_df, test_df, scaler,
     test_ds  = PressureDataset(test_df, scaler)
 
     if mutate_fn is not None:
-        # get_masks returns a non-writable numpy view of the parquet buffer;
-        # we own the dataset now so promote to writable copies before mutating.
+                                                                            
+                                                                               
         for d in (train_ds, val_ds, test_ds):
             d.X = np.array(d.X, copy=True)
             d.masks = np.array(d.masks, copy=True)
@@ -136,7 +98,7 @@ def run_one(name: str, train_df, val_df, test_df, scaler,
     print(f"  TEST  AUC={test_m['auc']:.4f}  Brier={test_m['brier']:.4f}  "
           f"LL={test_m['log_loss']:.4f}  Acc={test_m['accuracy']:.4f}")
 
-    # Strip history out of the config we serialise (already in train_info)
+                                                                          
     cfg_serialisable = {k: v for k, v in asdict(config).items() if k != "history"}
 
     return {
@@ -150,10 +112,6 @@ def run_one(name: str, train_df, val_df, test_df, scaler,
         "checkpoint": ckpt,
     }
 
-
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
 
 def baseline_aucs() -> dict[str, dict]:
     with open(BASELINE_LSTM) as f: lstm_base = json.load(f)
@@ -185,7 +143,7 @@ def main():
 
     runs: list[dict] = []
 
-    # 1. LSTM T=1
+                 
     runs.append(run_one(
         "LSTM T=1",
         train_df, val_df, test_df, scaler,
@@ -195,7 +153,7 @@ def main():
         forward_fn=lstm_forward,
     ))
 
-    # 2. LSTM hidden=32 (T=3 retained)
+                                      
     runs.append(run_one(
         "LSTM hidden=32",
         train_df, val_df, test_df, scaler,
@@ -205,7 +163,7 @@ def main():
         forward_fn=lstm_forward,
     ))
 
-    # 3. Transformer T=1
+                        
     runs.append(run_one(
         "Transformer T=1",
         train_df, val_df, test_df, scaler,
@@ -214,11 +172,11 @@ def main():
             n_features=15, seq_len=3, d_model=64, nhead=4, dim_ff=128,
             num_layers=2, attn_dropout=0.1, head_dropout=0.2),
         forward_fn=transformer_forward,
-        # Match the Transformer baseline LR (3e-4) for a fair comparison
+                                                                        
         config_overrides={"lr": 3e-4},
     ))
 
-    # 4. Transformer without closing_speed features
+                                                   
     runs.append(run_one(
         "Transformer no-closing-speed",
         train_df, val_df, test_df, scaler,

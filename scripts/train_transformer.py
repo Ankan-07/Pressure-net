@@ -1,12 +1,3 @@
-"""
-Train the Transformer encoder.
-
-Uses the same match-id split (seed=42) as scripts/train_baselines.py so
-metrics are directly comparable to LR, XGBoost, and the LSTM.
-
-Run from project root:
-    uv run python scripts/train_transformer.py
-"""
 import json
 import os
 import sys

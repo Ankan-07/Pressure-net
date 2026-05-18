@@ -1,22 +1,3 @@
-"""
-Week 5 — Platt-scale all four models and write results/eval_results.md.
-
-For each model:
-  1. Produce uncalibrated probabilities on val and test (retrain LR/XGB
-     fresh; load LSTM/Transformer from their Week 4 checkpoints).
-  2. Fit a PlattCalibrator on the val (score, label) pairs.
-  3. Compute the full 5-metric suite on TEST before and after calibration.
-  4. Save reliability curve (10-bin) overlaying raw vs calibrated.
-
-Outputs:
-    results/eval_results.md                — combined comparison table
-    results/calibration/<model>.png        — reliability plots
-    results/calibration/<model>.json       — fitted (a, b)
-    results/eval_metrics.json              — machine-readable metrics dump
-
-Run from project root:
-    uv run python scripts/run_calibration.py
-"""
 from __future__ import annotations
 
 import json
@@ -76,7 +57,6 @@ def fmt(name, m):
 
 def plot_calibration(name: str, raw: np.ndarray, cal: np.ndarray,
                      labels: np.ndarray, path: Path) -> None:
-    """10-bin reliability diagram: raw vs Platt-calibrated, overlay diagonal."""
     fig, ax = plt.subplots(figsize=(5.2, 5.2))
     for probs, label, marker, color in [
         (raw, "raw", "o", "#888"),
@@ -113,7 +93,6 @@ def transformer_forward(m, b): return m(b["x"], b["pad_mask"])
 def calibrate_one(name: str, val_scores: np.ndarray, val_labels: np.ndarray,
                   test_scores: np.ndarray, test_labels: np.ndarray,
                   score_type: str) -> dict:
-    """Fit Platt on val, return raw/cal test metrics + fitted (a, b)."""
     raw_probs = (test_scores if score_type == "prob"
                  else 1.0 / (1.0 + np.exp(-test_scores)))
 
@@ -149,19 +128,19 @@ def main():
           f"val={val_df['match_id'].nunique()} test={test_df['match_id'].nunique()}")
     print(f"events   train={len(train_df)} val={len(val_df)} test={len(test_df)}")
 
-    # ---- Flat features for LR + XGBoost ----
+                                              
     X_train, y_train = to_flat(train_df), train_df["label"].to_numpy()
     X_val,   y_val   = to_flat(val_df),   val_df["label"].to_numpy()
     X_test,  y_test  = to_flat(test_df),  test_df["label"].to_numpy()
 
-    # ---- 3D tensors for the deep models ----
+                                              
     scaler  = fit_scaler(train_df)
     val_ds  = PressureDataset(val_df, scaler)
     test_ds = PressureDataset(test_df, scaler)
 
     summary = []
 
-    # ---- 1. Logistic Regression ----
+                                      
     print("\n[1/4] Logistic Regression — refit + Platt")
     lr = build_logistic_pipeline(C=1.0, seed=SEED)
     lr.fit(X_train, y_train)
@@ -171,7 +150,7 @@ def main():
         "LR", lr_val_p, y_val, lr_test_p, y_test, score_type="prob"
     ))
 
-    # ---- 2. XGBoost ----
+                          
     print("\n[2/4] XGBoost — refit + Platt")
     spw = float((y_train == 0).sum()) / max(int((y_train == 1).sum()), 1)
     xgb = XGBClassifier(
@@ -188,7 +167,7 @@ def main():
         "XGBoost", xgb_val_p, y_val, xgb_test_p, y_test, score_type="prob"
     ))
 
-    # ---- 3. LSTM ----
+                       
     print("\n[3/4] LSTM — load checkpoint + Platt")
     v_logits, v_labels, t_logits, t_labels = deep_logits(
         PressureLSTM, LSTM_CKPT, val_ds, test_ds, lstm_forward,
@@ -198,7 +177,7 @@ def main():
         "LSTM", v_logits, v_labels, t_logits, t_labels, score_type="logit"
     ))
 
-    # ---- 4. Transformer ----
+                              
     print("\n[4/4] Transformer — load checkpoint + Platt")
     v_logits, v_labels, t_logits, t_labels = deep_logits(
         PressureTransformer, TRANSFORMER_CKPT, val_ds, test_ds, transformer_forward,
@@ -209,7 +188,7 @@ def main():
         "Transformer", v_logits, v_labels, t_logits, t_labels, score_type="logit"
     ))
 
-    # ---- Write JSON + Markdown ----
+                                     
     EVAL_JSON.parent.mkdir(parents=True, exist_ok=True)
     with open(EVAL_JSON, "w") as f:
         json.dump({"summary": summary,

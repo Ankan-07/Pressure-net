@@ -1,17 +1,3 @@
-"""
-Shared training utilities for the LSTM and Transformer.
-
-Provides the training loop, evaluation function, early stopping, and
-checkpoint handling. Per-model scripts in scripts/ supply only the model
-instance, the forward adapter (each model has a different forward signature),
-and the hyperparameter config.
-
-Why the forward adapter
------------------------
-PressureLSTM expects (x, num_real); PressureTransformer expects (x, pad_mask).
-Rather than make the training loop know about both, each script passes a tiny
-callable `forward_fn(model, batch) -> logits` so train.py stays model-agnostic.
-"""
 from __future__ import annotations
 
 import time
@@ -37,9 +23,9 @@ class TrainConfig:
     weight_decay: float = 1e-2
     batch_size: int = 128
     epochs: int = 50
-    patience: int = 7              # early stop on val loss
-    t_max: int = 50                # CosineAnnealingLR T_max
-    pos_weight: float = 1.0        # n_neg / n_pos from train labels
+    patience: int = 7                                      
+    t_max: int = 50                                         
+    pos_weight: float = 1.0                                         
     grad_clip: float = 1.0
     seed: int = 42
     num_workers: int = 0
@@ -65,7 +51,6 @@ def _epoch(model: nn.Module, loader: DataLoader, criterion: nn.Module,
            device: torch.device, forward_fn: ForwardFn,
            optimizer: torch.optim.Optimizer | None = None,
            grad_clip: float | None = None) -> tuple[float, np.ndarray, np.ndarray]:
-    """Run a single epoch. If optimizer is None we are in eval mode."""
     train = optimizer is not None
     model.train(train)
 
@@ -113,10 +98,6 @@ def compute_metrics(logits: np.ndarray, labels: np.ndarray) -> dict:
 def fit(model: nn.Module, train_ds: Dataset, val_ds: Dataset,
         forward_fn: ForwardFn, config: TrainConfig,
         checkpoint_path: str | Path) -> dict:
-    """
-    Train with early stopping on val loss. Saves best checkpoint to
-    `checkpoint_path` and returns final history + best epoch metrics.
-    """
     set_seed(config.seed)
     device = pick_device()
     print(f"[device] {device}")
@@ -200,7 +181,6 @@ def fit(model: nn.Module, train_ds: Dataset, val_ds: Dataset,
 @torch.no_grad()
 def predict_logits(model: nn.Module, ds: Dataset, forward_fn: ForwardFn,
                    batch_size: int = 256) -> tuple[np.ndarray, np.ndarray]:
-    """Return (logits, labels) for a dataset using the current model weights."""
     device = pick_device()
     model.to(device).eval()
     loader = DataLoader(ds, batch_size=batch_size, shuffle=False)

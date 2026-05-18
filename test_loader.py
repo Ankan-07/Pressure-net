@@ -11,10 +11,7 @@ print(f"Events:  {events.shape}")
 print(f"Frames:  {frames.shape}")
 print(f"Lineups: {lineups.shape}")
 
-#print("\nSaving to parquet...")
-#save_processed(events, frames, lineups, PROCESSED_DIR)
-#print("Done.")
-
+                                
 pressing_events = filter_pressing_events(events, frames)
 pressing_events_labeled = assign_labels(pressing_events)
 print(f"\nLabel distribution:\n{pressing_events_labeled['label'].value_counts()}")
@@ -185,27 +182,26 @@ def test_get_voronoi_area():
 
     print(f"\nValidation Checks:")
 
-    # Check 1: Area is a float or nan
+                                     
     assert isinstance(area, float) or pd.isna(area), "Area must be a float"
     print("  [PASS] Return type is float")
 
-    # Check 2: Area is non-negative
+                                   
     if not pd.isna(area):
         assert area >= 0, "Area must be non-negative"
         print("  [PASS] Area is non-negative")
 
-    # Check 3: Area is within pitch bounds (0 to 9600 sq m = 120*80)
+                                                                    
     if not pd.isna(area):
         assert area <= 9600, f"Area {area} exceeds total pitch size"
         print("  [PASS] Area is within pitch bounds (<= 9600 sq m)")
 
-    # Check 4: Area is plausible — ball-carrier under pressure unlikely to own > 500 sq m
+                                                                                         
     if not pd.isna(area):
         assert area < 500, f"Area {area} is implausibly large for a pressing event"
         print("  [PASS] Area is plausibly small for a pressing event (< 500 sq m)")
 
-    # Check 5: Edge case — fewer than 4 players returns nan
-    # Take only 3 rows from the actual event's players so the event_uuid filter still matches
+                                                           
     event_players = frames[frames["event_uuid"] == event_id]
     fake_frames = event_players.iloc[:3].copy()
     area_edge = get_voronoi_area(event_id, fake_frames)
@@ -355,9 +351,4 @@ def test_build_feature_vector():
     print("\n[SUCCESS] test_build_feature_vector PASSED\n")
 
 
-#test_get_defender_distance()
-#test_get_closing_speeds()
-#test_get_voronoi_area()
-#test_get_pitch_zone()
-#test_get_pass_lane_density()
 test_build_feature_vector()

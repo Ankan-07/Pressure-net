@@ -27,7 +27,6 @@ def download_file(source, save_path):
         raise CustomException(e,sys)
 
 def get_match_ids(competition_id, season_id):
-    """Download the matches file and extract all match IDs."""
     matches_url = f"{source_path}/matches/{competition_id}/{season_id}.json"
     matches_path = f"{data_dir}/matches/{competition_id}_{season_id}.json"
 
@@ -52,21 +51,21 @@ def main():
         for i, match_id in enumerate(match_ids):
             print(f"  [{i+1}/{len(match_ids)}] match {match_id}", end="  ")
 
-            # Events file
+                         
             download_file(
                 f"{source_path}/events/{match_id}.json",
                 f"{data_dir}/events/{match_id}.json"
             )
             print("events ✓", end="  ")
 
-            # 360 freeze frames
+                               
             download_file(
                 f"{source_path}/three-sixty/{match_id}.json",
                 f"{data_dir}/three-sixty/{match_id}.json"
             )
             print("360 ✓", end="  ")
 
-            # Lineups
+                     
             download_file(
                 f"{source_path}/lineups/{match_id}.json",
                 f"{data_dir}/lineups/{match_id}.json"

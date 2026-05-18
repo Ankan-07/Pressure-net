@@ -1,12 +1,3 @@
-"""
-Train Week 3 baselines: Logistic Regression and XGBoost.
-
-Both consume the flattened (N, 45) feature matrix. Split is by match_id
-(see src/models/dataset.py). Writes baseline_results.md at project root.
-
-Run from project root:
-    uv run python scripts/train_baselines.py
-"""
 import os
 import sys
 import time
@@ -57,7 +48,7 @@ def main():
     X_test, y_test = to_flat(test_df), test_df["label"].to_numpy()
     feat_names = flat_feature_names()
 
-    # ---- Logistic Regression ----
+                                   
     print("\n[1/2] Training Logistic Regression...")
     t = time.time()
     lr = build_logistic_pipeline(C=1.0, seed=SEED)
@@ -77,7 +68,7 @@ def main():
     for name, c in lr_top:
         print(f"    {name:35s}  {c:+.4f}")
 
-    # ---- XGBoost ----
+                       
     print("\n[2/2] Training XGBoost...")
     n_neg = int((y_train == 0).sum())
     n_pos = int((y_train == 1).sum())
@@ -117,7 +108,7 @@ def main():
     for name, imp in xgb_top:
         print(f"    {name:35s}  {imp:.4f}")
 
-    # ---- Gate checks ----
+                           
     LR_GATE, XGB_GATE = 0.63, 0.68
     lr_pass = lr_test["auc"] > LR_GATE
     xgb_pass = xgb_test["auc"] > XGB_GATE
@@ -125,7 +116,7 @@ def main():
     print(f"  LR  AUC {lr_test['auc']:.4f} {'PASS' if lr_pass else 'FAIL'} (target > {LR_GATE})")
     print(f"  XGB AUC {xgb_test['auc']:.4f} {'PASS' if xgb_pass else 'FAIL'} (target > {XGB_GATE})")
 
-    # ---- Write baseline_results.md ----
+                                         
     write_results_md(
         path=OUTPUT_MD,
         n_train=len(train_df), n_val=len(val_df), n_test=len(test_df),

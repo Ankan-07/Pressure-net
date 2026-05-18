@@ -1,12 +1,3 @@
-"""
-Train the bidirectional LSTM baseline.
-
-Uses the same match-id split (seed=42) as scripts/train_baselines.py so
-metrics are directly comparable to LR and XGBoost.
-
-Run from project root:
-    uv run python scripts/train_lstm.py
-"""
 import json
 import os
 import sys

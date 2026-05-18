@@ -15,3 +15,11 @@ reference doc/
 CLAUDE.md
 prompt.txt
 results/
+
+# strip-and-document generated files
+# Auto-generated documentation — do not commit
+**/*.md
+!README.md
+!CHANGELOG.md
+!CONTRIBUTING.md
+!docs/**/*.md

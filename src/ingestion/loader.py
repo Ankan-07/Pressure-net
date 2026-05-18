@@ -7,7 +7,6 @@ from src.logger import logging
 import pyarrow
 
 def load_events(data_dir):
-    '''Load all events into a single dataframe'''
     all_events = []
     events_dir = os.path.join(data_dir, "events")
 
@@ -27,11 +26,9 @@ def load_events(data_dir):
         all_events.extend(events)
 
 
-
     return pd.DataFrame(all_events)
 
 def load_frames(data_dir):
-    '''Load alll the 360 freeze frames into a single dataframe '''
     all_frames = []
     frames_dir = os.path.join(data_dir, "three-sixty")
 
@@ -53,7 +50,6 @@ def load_frames(data_dir):
     return pd.DataFrame(all_frames)
 
 def load_lineups(data_dir):
-    '''Load all the lineups into a single dataframe'''
     all_lineups = []
     lineup_dir = os.path.join(data_dir,"lineups")
 
@@ -82,13 +78,13 @@ def load_frames_exploaded(data_dir):
         '''Load 360 frames with one row per player per event.'''
         frames = load_frames(data_dir)
 
-        # one row per player
+                            
         frames = frames.explode("freeze_frame").reset_index(drop=True)
 
-        # unpack the dictionary into columns
+                                            
         player_data = pd.json_normalize(frames["freeze_frame"])
 
-        # join back with the event_uuid and match_id
+                                                    
         frames = frames[["event_uuid", "match_id"]].reset_index(drop=True)
         frames = pd.concat([frames, player_data], axis=1)
 
@@ -101,7 +97,6 @@ def load_frames_exploaded(data_dir):
         raise CustomException(e, sys)
 
 def save_processed(events, frames, lineups, output_dir):
-    '''Save loaded dataframes as parquet files'''
     try:
         os.makedirs(output_dir, exist_ok=True)
 
@@ -115,7 +110,6 @@ def save_processed(events, frames, lineups, output_dir):
         raise CustomException(e,sys)
 
 def load_processed(output_dir):
-    """Load processed parquet files"""
     try:
         events = pd.read_parquet(os.path.join(output_dir, "events.parquet"))
         frames = pd.read_parquet(os.path.join(output_dir, "frames.parquet"))

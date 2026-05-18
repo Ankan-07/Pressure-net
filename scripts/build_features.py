@@ -1,24 +1,9 @@
-"""
-Build the canonical feature parquet for PressureNet.
-
-Reads processed events / frames / lineups → filters pressing events → assigns
-labels → builds (T=3, F=15) temporal windows for every pressing event → saves
-to data/features/features.parquet.
-
-This is the production pipeline entry point. Run from project root:
-    uv run python scripts/build_features.py
-
-Output schema (51 columns):
-    feat_t{0..2}_{0..14}   - 45 feature columns (3 timesteps x 15 features)
-    mask_t{0,1,2}          - True if that timestep is zero-padded
-    event_id, match_id, label
-"""
 import os
 import sys
 import time
 import numpy as np
 
-# Add project root to sys.path so `src.*` imports resolve when running from scripts/
+                                                                                    
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.ingestion.loader import load_processed
@@ -40,7 +25,7 @@ def main():
     print("PressureNet — feature build pipeline")
     print("=" * 60)
 
-    # 1. Load processed parquet files
+                                     
     t = time.time()
     events, frames, lineups = load_processed(PROCESSED_DIR)
     load_time = time.time() - t
@@ -49,7 +34,7 @@ def main():
     print(f"      frames:  {frames.shape}")
     print(f"      lineups: {lineups.shape}")
 
-    # 2. Filter to pressing events and assign labels
+                                                    
     t = time.time()
     pressing_events = filter_pressing_events(events, frames)
     pressing_events_labeled = assign_labels(pressing_events)
@@ -58,7 +43,7 @@ def main():
     print(f"      pressing events: {len(pressing_events_labeled)}")
     print(f"      label distribution:\n{pressing_events_labeled['label'].value_counts().to_string()}")
 
-    # 3. Build feature windows
+                              
     print(f"\n[3/3] Building (3,15) feature windows for all pressing events...")
     build_start = time.time()
     df_out = build_all_features(
@@ -67,7 +52,7 @@ def main():
     )
     build_time = time.time() - build_start
 
-    # Summary
+             
     total_time = time.time() - overall_start
     n = len(df_out)
     feat_cols = [c for c in df_out.columns if c.startswith("feat_")]
