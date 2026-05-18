@@ -1,0 +1,28 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Bebas+Neue&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body, #root { height: 100%; }
+  body {
+    @apply bg-ink-950 text-ink-100 font-sans antialiased;
+    background-image:
+      radial-gradient(1200px 600px at 15% -10%, rgba(124,255,107,0.04), transparent 60%),
+      radial-gradient(900px 500px at 110% 10%, rgba(255,182,39,0.03), transparent 60%);
+    background-attachment: fixed;
+  }
+  ::selection { @apply bg-pitch/30 text-chalk; }
+}
+
+@layer components {
+  .panel        { @apply bg-ink-900/80 border border-ink-700/60 backdrop-blur-sm; }
+  .hairline     { @apply border-ink-700/60; }
+  .stat-num     { @apply font-mono tabular-nums; }
+  .kicker       { @apply text-[11px] uppercase tracking-widest2 text-ink-300 font-medium; }
+  .pill         { @apply inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider2 font-medium border; }
+  .pill-pitch   { @apply pill text-pitch border-pitch/30 bg-pitch/[0.06]; }
+  .pill-ink     { @apply pill text-ink-200 border-ink-600 bg-ink-800/60; }
+  .pill-whistle { @apply pill text-whistle border-whistle/30 bg-whistle/[0.06]; }
+}
