@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import torch
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from src.models.calibrate import PlattCalibrator
@@ -101,6 +102,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
+)
+
 
 @app.get("/api/v1/health")
 def health() -> dict:
@@ -175,10 +183,13 @@ def evaluate_event(req: EvaluateEventRequest) -> dict:
             else f"Bottom {percentile}% of difficulty — soft pressing situation"
         ),
         "attention_weights": {
-            "t0":  _top_features(heat[0]),                        
+            "t0":  _top_features(heat[0]),
             "t-1": _top_features(heat[1]),
             "t-2": _top_features(heat[2]),
         },
+        "timesteps": ["t=0", "t-1", "t-2"],
+        "feature_names": list(FEATURE_NAMES),
+        "heatmap": heat.tolist(),
     }
 
 
@@ -252,6 +263,31 @@ def leaderboard(
         "competition": (sub["competition_name"].iloc[0] if not sub.empty else None),
         "season": (str(sub["season_name"].iloc[0]) if not sub.empty else None),
     }
+
+
+@app.get("/api/v1/players/search")
+def players_search(
+    q: str = Query(..., min_length=1, max_length=64),
+    limit: int = Query(10, ge=1, le=50),
+) -> dict:
+    needle = q.strip().lower()
+    df = state.ratings
+    name_lower = df["player_name"].astype(str).str.lower()
+    starts = name_lower.str.startswith(needle)
+    contains = name_lower.str.contains(needle, regex=False) & ~starts
+    ordered = pd.concat([df[starts], df[contains]]).head(limit)
+    matches = [
+        {
+            "player_id": int(r["player_id"]),
+            "player_name": r["player_name"],
+            "team": r["team_name"],
+            "season": str(r["season_name"]),
+            "pap_score": round(float(r["pap_score"]), 4),
+            "pap_percentile": float(r["pap_percentile"]),
+        }
+        for _, r in ordered.iterrows()
+    ]
+    return {"query": q, "matches": matches}
 
 
 @app.get("/api/v1/player/{player_id}/attention")
