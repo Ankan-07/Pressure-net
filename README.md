@@ -57,32 +57,54 @@ Traditional football statistics (pass completion %, dribble success %, xG) treat
 
 ## Architecture Overview
 
+```mermaid
+flowchart TD
+  A[StatsBomb GitHub<br/>events + 360 + lineups]
+
+  subgraph Ingestion
+    B[downloader.py]
+    D[loader.py]
+  end
+  C[(data/raw/<br/>JSON)]
+  E[(data/processed/<br/>events · frames · lineups<br/>parquet)]
+
+  subgraph Transformation
+    F[engineer.py<br/>filter_pressing_events<br/>assign_labels<br/>build_temporal_window]
+  end
+  G[(data/features/features.parquet<br/>N × 3 × 15)]
+
+  subgraph Models
+    H1[Logistic<br/>baseline]
+    H2[XGBoost<br/>baseline]
+    H3[BiLSTM]
+    H4[Transformer]
+  end
+  CK[(data/checkpoints/*.pt)]
+
+  subgraph Ranking
+    I[calibrate.py<br/>Platt scaling]
+    J[pap_score.py]
+    K[explainer.py<br/>attention extraction]
+  end
+  L[(outputs/pressure_ratings.csv)]
+  M[(outputs/attention/&#123;player_id&#125;.npy)]
+
+  subgraph Serve
+    N[FastAPI<br/>api/main.py]
+    O[Streamlit<br/>dashboard/app.py]
+  end
+
+  A --> B --> C --> D --> E --> F --> G
+  G --> H1 & H2 & H3 & H4
+  H1 & H2 & H3 & H4 --> CK
+  CK --> I --> J --> L
+  H4 --> K --> M
+  L --> N
+  M --> N
+  N <--> O
 ```
-StatsBomb GitHub (events + 360 + lineups)
-        │
-        ▼
-src/ingestion/downloader.py  ──►  data/raw/ (JSON)
-        │
-        ▼
-src/ingestion/loader.py      ──►  data/processed/{events,frames,lineups}.parquet
-        │
-        ▼
-src/transformation/engineer.py
-  - filter_pressing_events()
-  - assign_labels()
-  - build_temporal_window()  ──►  data/features/features.parquet  (N × 3 × 15)
-        │
-        ▼
-src/models/{logistic,lstm,transformer}.py   ──►  data/checkpoints/*.pt
-src/models/calibrate.py (Platt scaling)
-        │
-        ▼
-src/ranking/pap_score.py     ──►  outputs/pressure_ratings.csv
-src/ranking/explainer.py     ──►  outputs/attention/{player_id}.npy
-        │
-        ▼
-api/main.py (FastAPI)  ←──────►  dashboard/app.py (Streamlit)
-```
+
+> The diagram source lives inline in this README — edit the Mermaid block above to update it. To export a static image for slides or papers, paste the block into [mermaid.live](https://mermaid.live) and download SVG/PNG.
 
 ---
 
