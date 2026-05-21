@@ -23,3 +23,5 @@ results/
 !CHANGELOG.md
 !CONTRIBUTING.md
 !docs/**/*.md
+.claude/
+.env

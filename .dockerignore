@@ -1,0 +1,37 @@
+# Git + IDE noise
+.git/
+.gitignore
+.idea/
+.vscode/
+
+# Local Python env (we build a fresh one in the image)
+.venv/
+__pycache__/
+*.pyc
+.python-version
+.pytest_cache/
+.ruff_cache/
+
+# Heavy raw + intermediate data — NOT needed at runtime
+data/raw/
+data/processed/
+data/features/features_sample.parquet
+data/checkpoints/ablation_*.pt
+data/checkpoints/lstm.pt
+
+# Notebooks and EDA artefacts
+src/notebooks/
+*.ipynb
+
+# Frontend lives separately on Vercel
+web/
+
+# Logs and build outputs
+logs/
+dist/
+build/
+*.egg-info/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
