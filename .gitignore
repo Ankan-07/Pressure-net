@@ -9,12 +9,21 @@ wheels/
 # Virtual environments
 .venv
 
-data/
+data/*
+!data/checkpoints/
+data/checkpoints/*
+!data/checkpoints/transformer.pt
+!data/features/
+data/features/*
+!data/features/features.parquet
 logs/
 reference doc/
 CLAUDE.md
 prompt.txt
-results/
+results/*
+!results/calibration/
+results/calibration/*
+!results/calibration/transformer.json
 
 # strip-and-document generated files
 # Auto-generated documentation — do not commit
